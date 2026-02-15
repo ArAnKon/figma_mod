@@ -1,10 +1,116 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <title>$Title$</title>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-$END$
+<div class="container">
+  <div class="header">
+    <h1>
+      <span class="figma-icon">F</span>
+      FigmaMod
+    </h1>
+    <div class="status" id="statusIndicator">● Выкл</div>
+  </div>
+
+  <div class="mode-section">
+    <div class="mode-title">Режимы</div>
+    <div class="mode-buttons">
+      <button id="inspectBtn" class="mode-btn" data-tool="selection">
+        <span class="mode-icon">🔍</span>
+        <span class="mode-name">Инспектор</span>
+        <span class="mode-hotkey">V / 1</span>
+      </button>
+      <button id="textToolBtn" class="mode-btn">
+        <span class="mode-icon">T</span>
+        <span class="mode-name">Текст</span>
+        <span class="mode-hotkey">T</span>
+      </button>
+      <button id="quickBtn" class="mode-btn">
+        <span class="mode-icon">⌥</span>
+        <span class="mode-name">Быстрый</span>
+        <span class="mode-hotkey">Alt</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="tools-section">
+    <div class="tools-title">Инструменты</div>
+    <div class="tools-grid">
+      <button class="tool-btn" data-tool="selection">
+        <span class="tool-icon">🔍</span>
+        <span>Инспектор (V)</span>
+      </button>
+      <button class="tool-btn" data-tool="distance">
+        <span class="tool-icon">📏</span>
+        <span>Расстояние</span>
+      </button>
+      <button id="gridToolBtn" class="tool-btn" data-tool="grid">
+        <span class="tool-icon">#</span>
+        <span>Сетка</span>
+      </button>
+      <button id="rulersToolBtn" class="tool-btn" data-tool="rulers">
+        <span class="tool-icon">📐</span>
+        <span>Линейки</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="display-section">
+    <div class="display-title">Отображение</div>
+    <div class="display-controls">
+      <label class="display-checkbox">
+        <input type="checkbox" id="showColorHex" checked>
+        <span>Цвета (HEX)</span>
+      </label>
+      <label class="display-checkbox">
+        <input type="checkbox" id="showDimensions" checked>
+        <span>Размеры</span>
+      </label>
+      <label class="display-checkbox">
+        <input type="checkbox" id="showDistances" checked>
+        <span>Отступы</span>
+      </label>
+      <label class="display-checkbox">
+        <input type="checkbox" id="snapToElements">
+        <span>Привязка</span>
+      </label>
+    </div>
+  </div>
+
+  <div class="shortcuts-section">
+    <div class="shortcuts-title">Горячие клавиши</div>
+    <div class="shortcuts-list">
+      <div class="shortcut-item">
+        <kbd>V</kbd> / <kbd>1</kbd>
+        <span>Инспектор</span>
+      </div>
+      <div class="shortcut-item">
+        <kbd>T</kbd>
+        <span>Текст / шрифт</span>
+      </div>
+      <div class="shortcut-item">
+        <kbd>Alt</kbd>
+        <span>Быстрый режим</span>
+      </div>
+      <div class="shortcut-item">
+        <kbd>Esc</kbd>
+        <span>Выход</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="actions-section">
+    <button id="clearAllBtn" class="action-btn clear-btn">
+      Очистить всё
+    </button>
+    <button id="disableBtn" class="action-btn disable-btn">
+      Отключить
+    </button>
+  </div>
+</div>
+
+<script src="popup.js"></script>
 </body>
 </html>
