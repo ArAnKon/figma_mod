@@ -1,0 +1,127 @@
+.figmamod-active {
+    cursor: crosshair !important;
+}
+
+.figmamod-active * {
+    user-select: none !important;
+    -webkit-user-select: none !important;
+}
+
+.figmamod-highlight {
+    animation: figmamod-highlight-fade 0.2s ease-out;
+}
+
+.figmamod-quick-highlight {
+    animation: figmamod-quick-highlight 0.15s ease-out;
+}
+
+.figmamod-label {
+    animation: figmamod-label-fade 0.15s ease-out;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.figmamod-color-label {
+    animation: figmamod-label-fade 0.15s ease-out;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    transition: transform 0.1s, opacity 0.1s;
+}
+
+.figmamod-color-label:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.figmamod-quick-label {
+    animation: figmamod-quick-label 0.1s ease-out;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.figmamod-color-label.copied {
+    background: rgba(13, 153, 255, 0.2) !important;
+    border-color: #0D99FF !important;
+}
+
+.figmamod-distance-label {
+    animation: figmamod-label-fade 0.15s ease-out;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.figmamod-measuring {
+    cursor: crosshair !important;
+}
+
+@keyframes figmamod-highlight-fade {
+    from {
+        opacity: 0;
+        transform: scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@keyframes figmamod-quick-highlight {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes figmamod-label-fade {
+    from {
+        opacity: 0;
+        transform: translateY(5px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes figmamod-quick-label {
+    from {
+        opacity: 0;
+        transform: translateX(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+body.figmamod-measure .figmamod-active {
+    cursor: grab !important;
+}
+
+body.figmamod-measure .figmamod-active:active {
+    cursor: grabbing !important;
+}
+
+#figmamod-grid {
+    pointer-events: none;
+    z-index: 2147483645;
+}
+
+#figmamod-rulers {
+    pointer-events: none;
+    z-index: 2147483645;
+}
+
+#figmamod-rulers div {
+    color: #ccc;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    font-size: 10px;
+    line-height: 20px;
+}
+
+#figmamod-rulers span {
+    position: absolute;
+    color: #888;
+}
+
+.figmamod-text-inspector {
+    cursor: text !important;
+}

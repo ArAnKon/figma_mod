@@ -1,4 +1,4 @@
-/* popup.css */
+
 * {
     margin: 0;
     padding: 0;
@@ -16,7 +16,7 @@ body {
     padding: 16px;
 }
 
-/* Header */
+
 .header {
     display: flex;
     justify-content: space-between;
@@ -60,7 +60,7 @@ body {
     background: rgba(13, 153, 255, 0.1);
 }
 
-/* Sections */
+
 .mode-section,
 .tools-section,
 .display-section,
@@ -81,7 +81,7 @@ body {
     letter-spacing: 0.5px;
 }
 
-/* Mode buttons */
+
 .mode-buttons {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -137,7 +137,7 @@ body {
     color: #0D99FF;
 }
 
-/* Tools grid */
+
 .tools-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -175,7 +175,7 @@ body {
     margin-bottom: 2px;
 }
 
-/* Display controls */
+
 .display-controls {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -199,7 +199,7 @@ body {
     cursor: pointer;
 }
 
-/* Helper buttons */
+
 .helpers-buttons {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -244,7 +244,7 @@ body {
     border-radius: 4px;
 }
 
-/* Shortcuts */
+
 .shortcuts-list {
     background: #2c2c2c;
     border: 1px solid #444;
@@ -275,7 +275,7 @@ body {
     font-family: monospace;
 }
 
-/* Actions */
+
 .actions-section {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -310,4 +310,23 @@ body {
 
 .disable-btn:hover {
     background: #1ca3ff;
+}
+
+
+button:disabled,
+button[disabled] {
+    opacity: 0.5 !important;
+    cursor: not-allowed !important;
+    pointer-events: none !important;
+}
+
+input:disabled,
+input[disabled] {
+    opacity: 0.5 !important;
+    cursor: not-allowed !important;
+}
+
+
+.disable-btn {
+    transition: background 0.3s ease;
 }
