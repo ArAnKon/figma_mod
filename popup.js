@@ -15,8 +15,8 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const helperButtons = {
-        grid: document.getElementById('toggleGridBtn'),
-        rulers: document.getElementById('toggleRulersBtn')
+        grid: document.getElementById('gridToolBtn'),
+        rulers: document.getElementById('rulersToolBtn')
     };
 
     const actionButtons = {
@@ -24,12 +24,12 @@ document.addEventListener('DOMContentLoaded', () => {
         disable: document.getElementById('disableBtn')
     };
 
-    const fontInfoPanel = document.getElementById('fontInfoPanel');
-    const fontNameDisplay = document.getElementById('fontNameDisplay');
+
 
     let currentMode = 'idle';
     let currentTool = 'selection';
     let isExtensionEnabled = true;
+
 
     loadExtensionState();
     loadSettings();
@@ -49,38 +49,44 @@ document.addEventListener('DOMContentLoaded', () => {
             if (response) {
                 isExtensionEnabled = response.isEnabled;
 
-                if (isExtensionEnabled) {
-                    setTimeout(() => {
-                        setMode('inspect', 'selection');
-                    }, 100);
-                } else {
-                    setMode('idle');
-                }
+
+                chrome.tabs.query({}, (tabs) => {
+                    tabs.forEach(tab => {
+                        chrome.tabs.sendMessage(tab.id, {
+                            action: 'setExtensionState',
+                            isEnabled: isExtensionEnabled
+                        }).catch(() => {});
+                    });
+                });
 
                 updateUI();
             }
         });
     }
 
-    Object.entries(modeButtons).forEach(([mode, button]) => {
-        button.addEventListener('click', () => {
-            if (!isExtensionEnabled) {
-                toggleExtension();
-                return;
-            }
 
-            if (mode === 'quick') {
-                sendMessage({ action: 'setMode', mode: 'quick' });
-                setMode('quick');
-            } else if (mode === 'textTool') {
-                sendMessage({ action: 'setMode', mode: 'text' });
-                setMode('text');
-            } else {
-                sendMessage({ action: 'setMode', mode: 'inspect', tool: currentTool });
-                setMode('inspect', currentTool);
-            }
-        });
+    Object.entries(modeButtons).forEach(([mode, button]) => {
+        if (button) { // Добавлена проверка
+            button.addEventListener('click', () => {
+                if (!isExtensionEnabled) {
+                    toggleExtension();
+                    return;
+                }
+
+                let targetMode = mode;
+                if (mode === 'textTool') targetMode = 'text';
+                if (mode === 'quick') targetMode = 'quick';
+                if (mode === 'inspect') targetMode = 'inspect';
+
+                sendMessageToActiveTab({
+                    action: 'setMode',
+                    mode: targetMode
+                });
+                setMode(targetMode, currentTool);
+            });
+        }
     });
+
 
     toolButtons.forEach(button => {
         button.addEventListener('click', () => {
@@ -92,103 +98,97 @@ document.addEventListener('DOMContentLoaded', () => {
             const tool = button.dataset.tool;
 
             if (tool === 'grid') {
-                sendMessage({ action: 'toggleGrid' });
+                sendMessageToActiveTab({ action: 'toggleGrid' });
                 button.classList.toggle('active');
+
             } else if (tool === 'rulers') {
-                sendMessage({ action: 'toggleRulers' });
+                sendMessageToActiveTab({ action: 'toggleRulers' });
                 button.classList.toggle('active');
+
             } else if (tool === 'distance') {
                 showDistanceHint();
             } else {
                 setTool(tool);
-                sendMessage({ action: 'setMode', mode: 'inspect', tool: tool });
+                sendMessageToActiveTab({
+                    action: 'setMode',
+                    mode: 'inspect',
+                    tool: tool
+                });
                 setMode('inspect', tool);
             }
         });
     });
 
-    function showDistanceHint() {
-        const hint = document.createElement('div');
-        hint.style.cssText = `
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(13, 153, 255, 0.9);
-            color: white;
-            padding: 10px 16px;
-            border-radius: 8px;
-            font-size: 12px;
-            z-index: 10000;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-            animation: fadeOut 3s forwards;
-        `;
-        hint.innerHTML = '📏 Зажмите Ctrl и кликните, чтобы начать измерение';
-        document.body.appendChild(hint);
-
-        setTimeout(() => {
-            hint.remove();
-        }, 3000);
-    }
 
     Object.entries(displayCheckboxes).forEach(([key, checkbox]) => {
-        checkbox.addEventListener('change', () => {
+        if (checkbox) {
+            checkbox.addEventListener('change', () => {
+                if (!isExtensionEnabled) return;
+
+                const settingsKey = key === 'color' ? 'showColorHex' :
+                    key === 'dimensions' ? 'showDimensions' :
+                        key === 'distances' ? 'showDistances' : 'snapToElements';
+
+                const settings = { [settingsKey]: checkbox.checked };
+
+
+                chrome.storage.local.get(['figmamodSettings'], (result) => {
+                    const currentSettings = result.figmamodSettings || {};
+                    const newSettings = { ...currentSettings, ...settings };
+                    chrome.storage.local.set({ figmamodSettings: newSettings });
+                });
+
+
+                sendMessageToActiveTab({
+                    action: 'updateSettings',
+                    settings: settings
+                });
+            });
+        }
+    });
+
+
+    if (actionButtons.clear) {
+        actionButtons.clear.addEventListener('click', () => {
             if (!isExtensionEnabled) return;
 
-            const settingsKey = key === 'color' ? 'showColorHex' :
-                key === 'dimensions' ? 'showDimensions' :
-                    key === 'distances' ? 'showDistances' : 'snapToElements';
+            console.log('Clear all clicked');
 
-            updateSettings({ [settingsKey]: checkbox.checked });
+
+            chrome.tabs.query({}, (tabs) => {
+                tabs.forEach(tab => {
+                    chrome.tabs.sendMessage(tab.id, { action: 'clearAll' }).catch(() => {});
+                    chrome.tabs.sendMessage(tab.id, { action: 'setMode', mode: 'idle' }).catch(() => {});
+                });
+            });
+
+            setMode('idle');
+
+
+            chrome.storage.local.get(['figmamodSettings'], (result) => {
+                if (result.figmamodSettings) {
+                    const settings = result.figmamodSettings;
+                    settings.showGrid = false;
+                    settings.showRulers = false;
+                    chrome.storage.local.set({ figmamodSettings: settings });
+                }
+            });
+
+
+            toolButtons.forEach(button => {
+                if (button.dataset.tool === 'grid' || button.dataset.tool === 'rulers') {
+                    button.classList.remove('active');
+                }
+            });
         });
-    });
+    }
 
-    helperButtons.grid.addEventListener('click', () => {
-        if (!isExtensionEnabled) {
+
+    if (actionButtons.disable) {
+        actionButtons.disable.addEventListener('click', () => {
             toggleExtension();
-            return;
-        }
-
-        sendMessage({ action: 'toggleGrid' });
-        helperButtons.grid.classList.toggle('active');
-    });
-
-    helperButtons.rulers.addEventListener('click', () => {
-        if (!isExtensionEnabled) {
-            toggleExtension();
-            return;
-        }
-
-        sendMessage({ action: 'toggleRulers' });
-        helperButtons.rulers.classList.toggle('active');
-    });
-
-    actionButtons.clear.addEventListener('click', () => {
-        if (!isExtensionEnabled) return;
-        sendMessage({ action: 'clearAll' });
-        setMode('idle');
-    });
-
-    actionButtons.disable.addEventListener('click', () => {
-        toggleExtension();
-    });
-
-    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-        if (message.action === 'modeChanged') {
-            currentMode = message.mode;
-            currentTool = message.tool || 'selection';
-            updateUI();
-        }
-
-        if (message.action === 'fontInfo') {
-            if (message.fontFamily) {
-                fontNameDisplay.textContent = message.fontFamily.split(',')[0].replace(/['"]/g, '');
-                fontInfoPanel.style.display = 'block';
-            } else {
-                fontInfoPanel.style.display = 'none';
-            }
-        }
-    });
+        });
+    }
 
     function setMode(mode, tool = null) {
         if (!isExtensionEnabled && mode !== 'idle') return;
@@ -209,31 +209,29 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    function updateSettings(settings) {
-        if (!isExtensionEnabled) return;
-
-        sendMessage({ action: 'updateSettings', settings: settings });
-        chrome.storage.local.set({ figmamodSettings: settings });
-    }
-
     function loadSettings() {
         chrome.storage.local.get(['figmamodSettings'], (result) => {
             if (result.figmamodSettings) {
                 const settings = result.figmamodSettings;
 
-                if (settings.showColorHex !== undefined) displayCheckboxes.color.checked = settings.showColorHex;
-                if (settings.showDimensions !== undefined) displayCheckboxes.dimensions.checked = settings.showDimensions;
-                if (settings.showDistances !== undefined) displayCheckboxes.distances.checked = settings.showDistances;
-                if (settings.snapToElements !== undefined) displayCheckboxes.snap.checked = settings.snapToElements;
+                if (settings.showColorHex !== undefined && displayCheckboxes.color)
+                    displayCheckboxes.color.checked = settings.showColorHex;
+                if (settings.showDimensions !== undefined && displayCheckboxes.dimensions)
+                    displayCheckboxes.dimensions.checked = settings.showDimensions;
+                if (settings.showDistances !== undefined && displayCheckboxes.distances)
+                    displayCheckboxes.distances.checked = settings.showDistances;
+                if (settings.snapToElements !== undefined && displayCheckboxes.snap)
+                    displayCheckboxes.snap.checked = settings.snapToElements;
 
-                if (settings.showGrid) {
-                    helperButtons.grid.classList.add('active');
-                    document.querySelector('[data-tool="grid"]')?.classList.add('active');
-                }
-                if (settings.showRulers) {
-                    helperButtons.rulers.classList.add('active');
-                    document.querySelector('[data-tool="rulers"]')?.classList.add('active');
-                }
+
+                toolButtons.forEach(button => {
+                    if (button.dataset.tool === 'grid' && settings.showGrid) {
+                        button.classList.add('active');
+                    }
+                    if (button.dataset.tool === 'rulers' && settings.showRulers) {
+                        button.classList.add('active');
+                    }
+                });
             }
         });
     }
@@ -245,18 +243,68 @@ document.addEventListener('DOMContentLoaded', () => {
             actionButtons.disable.textContent = 'Включить';
             actionButtons.disable.style.background = '#0D99FF';
             currentMode = 'idle';
-            fontInfoPanel.style.display = 'none';
+
+
+            const controls = [
+                ...Object.values(modeButtons).filter(Boolean),
+                ...Array.from(toolButtons).filter(Boolean),
+                actionButtons.clear
+            ];
+
+            controls.forEach(control => {
+                if (control) {
+                    control.disabled = true;
+                    control.style.opacity = '0.5';
+                    control.style.pointerEvents = 'none';
+                }
+            });
+
+            Object.values(displayCheckboxes).filter(Boolean).forEach(checkbox => {
+                if (checkbox) {
+                    checkbox.disabled = true;
+                    checkbox.style.opacity = '0.5';
+                }
+            });
+
         } else {
             statusIndicator.textContent = currentMode === 'idle' ? '● Вкл (ожидание)' : `● ${currentMode}`;
             statusIndicator.className = currentMode === 'idle' ? 'status' : 'status active';
             actionButtons.disable.textContent = 'Отключить';
             actionButtons.disable.style.background = '#ff4444';
+
+
+            const controls = [
+                ...Object.values(modeButtons).filter(Boolean),
+                ...Array.from(toolButtons).filter(Boolean),
+                actionButtons.clear
+            ];
+
+            controls.forEach(control => {
+                if (control) {
+                    control.disabled = false;
+                    control.style.opacity = '1';
+                    control.style.pointerEvents = 'auto';
+                }
+            });
+
+            Object.values(displayCheckboxes).filter(Boolean).forEach(checkbox => {
+                if (checkbox) {
+                    checkbox.disabled = false;
+                    checkbox.style.opacity = '1';
+                }
+            });
         }
 
+
         Object.entries(modeButtons).forEach(([mode, button]) => {
-            button.classList.remove('active');
-            if (isExtensionEnabled && mode === currentMode) {
-                button.classList.add('active');
+            if (button) {
+                button.classList.remove('active');
+                let targetMode = mode;
+                if (mode === 'textTool') targetMode = 'text';
+
+                if (isExtensionEnabled && targetMode === currentMode) {
+                    button.classList.add('active');
+                }
             }
         });
 
@@ -265,73 +313,66 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             toolButtons.forEach(button => button.classList.remove('active'));
         }
-
         chrome.storage.local.get(['figmamodSettings'], (result) => {
             if (result.figmamodSettings && isExtensionEnabled) {
-                helperButtons.grid.classList.toggle('active', result.figmamodSettings.showGrid);
-                helperButtons.rulers.classList.toggle('active', result.figmamodSettings.showRulers);
-
-                const gridToolBtn = document.querySelector('[data-tool="grid"]');
-                const rulersToolBtn = document.querySelector('[data-tool="rulers"]');
-                if (gridToolBtn) gridToolBtn.classList.toggle('active', result.figmamodSettings.showGrid);
-                if (rulersToolBtn) rulersToolBtn.classList.toggle('active', result.figmamodSettings.showRulers);
-            } else {
-                helperButtons.grid.classList.remove('active');
-                helperButtons.rulers.classList.remove('active');
-                document.querySelector('[data-tool="grid"]')?.classList.remove('active');
-                document.querySelector('[data-tool="rulers"]')?.classList.remove('active');
-            }
-        });
-
-        const controls = [
-            ...Object.values(modeButtons),
-            ...toolButtons,
-            ...Object.values(helperButtons),
-            actionButtons.clear
-        ];
-
-        controls.forEach(control => {
-            if (control) {
-                control.disabled = !isExtensionEnabled;
-                control.style.opacity = isExtensionEnabled ? '1' : '0.5';
-                control.style.pointerEvents = isExtensionEnabled ? 'auto' : 'none';
-            }
-        });
-
-        Object.values(displayCheckboxes).forEach(checkbox => {
-            if (checkbox) {
-                checkbox.disabled = !isExtensionEnabled;
-                checkbox.style.opacity = isExtensionEnabled ? '1' : '0.5';
+                toolButtons.forEach(button => {
+                    if (button.dataset.tool === 'grid') {
+                        button.classList.toggle('active', result.figmamodSettings.showGrid);
+                    }
+                    if (button.dataset.tool === 'rulers') {
+                        button.classList.toggle('active', result.figmamodSettings.showRulers);
+                    }
+                });
             }
         });
     }
 
-    function sendMessage(message) {
-        if (!isExtensionEnabled && message.action !== 'setMode' &&
-            message.action !== 'toggleExtension' && message.action !== 'getExtensionState') {
-            return;
-        }
-
+    function sendMessageToActiveTab(message) {
         chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-            if (!tabs[0]) return;
+            if (!tabs[0]) {
+                console.log('Нет активной вкладки');
+                return;
+            }
 
             chrome.tabs.sendMessage(tabs[0].id, message).catch(error => {
                 console.log('Ошибка отправки сообщения:', error);
-
-                if (message.action === 'toggleGrid' || message.action === 'toggleRulers') {
-                    return;
-                }
 
                 chrome.scripting.executeScript({
                     target: { tabId: tabs[0].id },
                     files: ['content.js']
                 }).then(() => {
                     setTimeout(() => {
-                        chrome.tabs.sendMessage(tabs[0].id, message);
+                        chrome.tabs.sendMessage(tabs[0].id, message).catch(e =>
+                            console.log('Повторная отправка не удалась:', e)
+                        );
                     }, 500);
                 }).catch(err => console.log('Не удалось загрузить content.js:', err));
             });
         });
+    }
+
+    function showDistanceHint() {
+        const hint = document.createElement('div');
+        hint.style.cssText = `
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(13, 153, 255, 0.9);
+            color: white;
+            padding: 10px 16px;
+            border-radius: 8px;
+            font-size: 12px;
+            z-index: 10000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            animation: fadeOut 3s forwards;
+        `;
+        hint.innerHTML = '📏 Зажмите Ctrl (Win) / Cmd (Mac) и кликните, чтобы начать измерение';
+        document.body.appendChild(hint);
+
+        setTimeout(() => {
+            hint.remove();
+        }, 3000);
     }
 
     const style = document.createElement('style');

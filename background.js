@@ -65,6 +65,7 @@ function toggleExtensionState() {
     chrome.storage.local.get(['isExtensionEnabled'], (result) => {
         const newState = !(result.isExtensionEnabled !== false);
         chrome.storage.local.set({ isExtensionEnabled: newState }, () => {
+            // Отправляем сообщение во все вкладки
             chrome.tabs.query({}, (tabs) => {
                 tabs.forEach(tab => {
                     chrome.tabs.sendMessage(tab.id, {
@@ -90,6 +91,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         chrome.storage.local.get(['isExtensionEnabled'], (result) => {
             const newState = !(result.isExtensionEnabled !== false);
             chrome.storage.local.set({ isExtensionEnabled: newState }, () => {
+                // Отправляем сообщение во все вкладки
                 chrome.tabs.query({}, (tabs) => {
                     tabs.forEach(tab => {
                         chrome.tabs.sendMessage(tab.id, {
@@ -101,6 +103,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 sendResponse({ isEnabled: newState });
             });
         });
+        return true;
+    }
+
+    // Добавляем обработчик для clearAll
+    if (message.action === 'clearAll') {
+        chrome.tabs.query({}, (tabs) => {
+            tabs.forEach(tab => {
+                chrome.tabs.sendMessage(tab.id, {
+                    action: 'clearAll'
+                }).catch(() => {});
+            });
+        });
+        sendResponse({ success: true });
         return true;
     }
 });

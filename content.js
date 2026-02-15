@@ -456,28 +456,45 @@ class FigmaMod {
     }
 
     showElementsDistance(rect1, rect2) {
-        console.log('showElementsDistance called');
-
         this.clearInfoLabels();
         this.clearDistanceLabel();
         document.getElementById('figmamod-selected-element')?.remove();
 
-        // Создаем контейнер для линий
+        //контейнер для линий
         const linesContainer = document.createElement('div');
         linesContainer.id = 'figmamod-distance-lines';
         linesContainer.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            z-index: 2147483646;
-        `;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 2147483646;
+    `;
+         //Определяем какой элемент левее
+        const isFirstLeft = rect1.left < rect2.left;
 
-        // Вычисляем расстояния
-        const horizontalDistance = Math.abs(rect2.left - (rect1.left + rect1.width));
-        const verticalDistance = Math.abs(rect2.top - (rect1.top + rect1.height));
+        //горизонтальное расстояние между элементами
+        let horizontalDistance;
+        if (isFirstLeft) {
+            //Первый элемент слева второй справа
+            horizontalDistance = Math.max(0, rect2.left - (rect1.left + rect1.width));
+        } else {
+            //Второй элемент слева первый справа
+            horizontalDistance = Math.max(0, rect1.left - (rect2.left + rect2.width));
+        }
+
+        //Вертикальное расстояние
+        const isFirstTop = rect1.top < rect2.top;
+        let verticalDistance;
+        if (isFirstTop) {
+            //Первый элемент сверху второй снизу
+            verticalDistance = Math.max(0, rect2.top - (rect1.top + rect1.height));
+        } else {
+            //Второй элемент сверху первый снизу
+            verticalDistance = Math.max(0, rect1.top - (rect2.top + rect2.height));
+        }
 
         console.log('Distances calculated:', { horizontalDistance, verticalDistance });
 
@@ -486,30 +503,41 @@ class FigmaMod {
             const hLine = document.createElement('div');
             hLine.className = 'figmamod-measure-line';
 
+            // Определяем позицию линии
+            let left, width;
+            if (isFirstLeft) {
+                // Первый слева второй справа
+                left = rect1.left + rect1.width;
+                width = horizontalDistance;
+            } else {
+                // Второй слева первый справа
+                left = rect2.left + rect2.width;
+                width = horizontalDistance;
+            }
+
+            // Y
+            const yTop = Math.min(rect1.top, rect2.top);
+            const yBottom = Math.max(rect1.bottom, rect2.bottom);
             const y = (rect1.top + rect1.height/2 + rect2.top + rect2.height/2) / 2;
-            const x1 = rect1.left + rect1.width;
-            const x2 = rect2.left;
-            const left = Math.min(x1, x2);
-            const width = Math.abs(x2 - x1);
 
             hLine.style.cssText = `
-                left: ${left}px;
-                top: ${y - 1}px;
-                width: ${width}px;
-                height: 2px;
-                background: #ff4444;
-            `;
+            left: ${left}px;
+            top: ${y - 1}px;
+            width: ${width}px;
+            height: 2px;
+            background: #ff4444;
+        `;
             linesContainer.appendChild(hLine);
 
             // Подпись
             const hLabel = document.createElement('div');
             hLabel.className = 'figmamod-measure-label';
             hLabel.style.cssText += `
-                left: ${left + width/2}px;
-                top: ${y - 20}px;
-                transform: translateX(-50%);
-                background: #ff4444;
-            `;
+            left: ${left + width/2}px;
+            top: ${y - 20}px;
+            transform: translateX(-50%);
+            background: #ff4444;
+        `;
             hLabel.textContent = `${Math.round(horizontalDistance)}px`;
             linesContainer.appendChild(hLabel);
         }
@@ -519,29 +547,38 @@ class FigmaMod {
             const vLine = document.createElement('div');
             vLine.className = 'figmamod-measure-line';
 
+            // Определяем позицию линии
+            let top, height;
+            if (isFirstTop) {
+                //Первый сверху второй снизу
+                top = rect1.top + rect1.height;
+                height = verticalDistance;
+            } else {
+                //Второй сверху первый снизу
+                top = rect2.top + rect2.height;
+                height = verticalDistance;
+            }
+
+            // X
             const x = (rect1.left + rect1.width/2 + rect2.left + rect2.width/2) / 2;
-            const y1 = rect1.top + rect1.height;
-            const y2 = rect2.top;
-            const top = Math.min(y1, y2);
-            const height = Math.abs(y2 - y1);
 
             vLine.style.cssText = `
-                left: ${x - 1}px;
-                top: ${top}px;
-                width: 2px;
-                height: ${height}px;
-                background: #ff4444;
-            `;
+            left: ${x - 1}px;
+            top: ${top}px;
+            width: 2px;
+            height: ${height}px;
+            background: #ff4444;
+        `;
             linesContainer.appendChild(vLine);
 
             // Подпись
             const vLabel = document.createElement('div');
             vLabel.className = 'figmamod-measure-label';
             vLabel.style.cssText += `
-                left: ${x + 15}px;
-                top: ${top + height/2 - 8}px;
-                background: #ff4444;
-            `;
+            left: ${x + 15}px;
+            top: ${top + height/2 - 8}px;
+            background: #ff4444;
+        `;
             vLabel.textContent = `${Math.round(verticalDistance)}px`;
             linesContainer.appendChild(vLabel);
         }
@@ -549,24 +586,25 @@ class FigmaMod {
         // Добавляем центральную линию
         const centerLine = document.createElement('div');
         centerLine.style.cssText = `
-            position: fixed;
-            left: ${rect1.left + rect1.width/2}px;
-            top: ${rect1.top + rect1.height/2}px;
-            width: ${Math.sqrt(Math.pow(rect2.left + rect2.width/2 - (rect1.left + rect1.width/2), 2) +
+        position: fixed;
+        left: ${rect1.left + rect1.width/2}px;
+        top: ${rect1.top + rect1.height/2}px;
+        width: ${Math.sqrt(Math.pow(rect2.left + rect2.width/2 - (rect1.left + rect1.width/2), 2) +
             Math.pow(rect2.top + rect2.height/2 - (rect1.top + rect1.height/2), 2))}px;
-            height: 1px;
-            background: rgba(255, 68, 68, 0.3);
-            transform-origin: 0 0;
-            transform: rotate(${Math.atan2(rect2.top + rect2.height/2 - (rect1.top + rect1.height/2),
+        height: 1px;
+        background: rgba(255, 68, 68, 0.3);
+        transform-origin: 0 0;
+        transform: rotate(${Math.atan2(rect2.top + rect2.height/2 - (rect1.top + rect1.height/2),
             rect2.left + rect2.width/2 - (rect1.left + rect1.width/2))}rad);
-            pointer-events: none;
-            z-index: 2147483645;
-        `;
+        pointer-events: none;
+        z-index: 2147483645;
+    `;
         linesContainer.appendChild(centerLine);
 
         // Общее инфо
-        const infoLabel = document.createElement('div');
-        infoLabel.style.cssText = `
+        if (horizontalDistance > 0 || verticalDistance > 0) {
+            const infoLabel = document.createElement('div');
+            infoLabel.style.cssText = `
             position: fixed;
             left: ${(rect1.left + rect2.left + rect1.width/2 + rect2.width/2) / 2}px;
             top: ${Math.min(rect1.top, rect2.top) - 50}px;
@@ -583,13 +621,19 @@ class FigmaMod {
             transform: translate(-50%, 0);
             font-weight: bold;
         `;
-        infoLabel.innerHTML = `
-            <div style="display: flex; gap: 20px;">
-                <div>↔️ ${Math.round(horizontalDistance)}px</div>
-                <div>↕️ ${Math.round(verticalDistance)}px</div>
-            </div>
-        `;
-        linesContainer.appendChild(infoLabel);
+
+            let infoHtml = '<div style="display: flex; gap: 20px;">';
+            if (horizontalDistance > 0) {
+                infoHtml += `<div>↔️ ${Math.round(horizontalDistance)}px</div>`;
+            }
+            if (verticalDistance > 0) {
+                infoHtml += `<div>↕️ ${Math.round(verticalDistance)}px</div>`;
+            }
+            infoHtml += '</div>';
+
+            infoLabel.innerHTML = infoHtml;
+            linesContainer.appendChild(infoLabel);
+        }
 
         this.overlay.appendChild(linesContainer);
         this.distanceLine = linesContainer;
@@ -1583,9 +1627,6 @@ class FigmaMod {
         console.log('FigmaMod: все очищено');
     }
 }
-
-let figmamod = null;
-
 function initFigmaMod() {
     if (window.figmamodInstance) {
         return window.figmamodInstance;
