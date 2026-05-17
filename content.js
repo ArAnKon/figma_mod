@@ -6,10 +6,13 @@ class FigmaMod {
             showColorHex: true,
             showDimensions: true,
             showDistances: true,
+            showBoxModel: false,
+            showSpacingLabels: false,
             highlightColor: '#0D99FF',
             gridSize: 20,
             showGrid: false,
-            showRulers: false
+            showRulers: false,
+            simulateState: null
         };
 
         this.currentElement = null;
@@ -25,8 +28,13 @@ class FigmaMod {
         this.gridCanvas = null;
         this.rulersElement = null;
         this.measureElements = [];
+        this.selectedElements = [];
+        this.boxModelOverlay = null;
+        this.spacingLabels = [];
+        this.stateSimulationStyle = null;
+        this.colorPalette = [];
+        this.mobileViewport = null;
 
-        // Определяем платформу
         this.isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
         console.log('Платформа:', this.isMac ? 'macOS' : 'Windows');
 
@@ -232,6 +240,50 @@ class FigmaMod {
                         this.toggleRulers();
                     }
                     break;
+                case 'extractPalette':
+                    if (this.isEnabled) {
+                        this.showColorPalettePanel();
+                    }
+                    break;
+                case 'captureScreenshot':
+                    if (this.isEnabled) {
+                        this.captureScreenshot();
+                    }
+                    break;
+                case 'toggleStateSimulation':
+                    if (this.isEnabled) {
+                        this.toggleElementState(request.state);
+                    }
+                    break;
+                case 'runAccessibilityAudit':
+                    if (this.isEnabled) {
+                        this.runAccessibilityAudit();
+                    }
+                    break;
+                case 'toggleBoxModel':
+                    if (this.isEnabled) {
+                        this.settings.showBoxModel = !this.settings.showBoxModel;
+                        this.saveSettings();
+                        if (!this.settings.showBoxModel) this.clearBoxModel();
+                        sendResponse({ enabled: this.settings.showBoxModel });
+                    }
+                    break;
+                case 'toggleSpacingLabels':
+                    if (this.isEnabled) {
+                        this.settings.showSpacingLabels = !this.settings.showSpacingLabels;
+                        this.saveSettings();
+                        if (!this.settings.showSpacingLabels) this.clearSpacingLabels();
+                        sendResponse({ enabled: this.settings.showSpacingLabels });
+                    }
+                    break;
+                case 'toggleMobileView':
+                    if (this.isEnabled) {
+                        this.toggleMobileView();
+                    }
+                    break;
+                case 'clearMultiSelection':
+                    this.clearMultiSelection();
+                    break;
             }
         });
 
@@ -239,9 +291,9 @@ class FigmaMod {
             if (!this.isEnabled) return;
             if (e.target.matches('input, textarea, select, button, [contenteditable="true"]')) return;
 
-            const key = e.key.toLowerCase();
+            const code = e.code;
 
-            if (key === 'v' || key === '1') {
+            if (code === 'KeyV' || code === 'Digit1') {
                 if (!e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
                     e.preventDefault();
                     e.stopPropagation();
@@ -249,7 +301,7 @@ class FigmaMod {
                 }
             }
 
-            if (key === 't') {
+            if (code === 'KeyT') {
                 if (!e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
                     e.preventDefault();
                     e.stopPropagation();
@@ -257,14 +309,14 @@ class FigmaMod {
                 }
             }
 
-            if (key === 'escape') {
+            if (code === 'Escape') {
                 e.preventDefault();
                 e.stopPropagation();
                 this.setMode('idle');
                 this.clearMeasureElements();
             }
 
-            if (key === 'alt') {
+            if (code.startsWith('Alt')) {
                 if (!this.isAltPressed) {
                     this.isAltPressed = true;
                     if (this.mode !== 'quick') {
@@ -274,12 +326,12 @@ class FigmaMod {
                 }
             }
 
-            if (key === 'g' && (e.ctrlKey || e.metaKey)) {
+            if (code === 'KeyG' && (e.ctrlKey || e.metaKey)) {
                 e.preventDefault();
                 this.toggleGrid();
             }
 
-            if (key === 'r' && (e.ctrlKey || e.metaKey)) {
+            if (code === 'KeyR' && (e.ctrlKey || e.metaKey)) {
                 e.preventDefault();
                 this.toggleRulers();
             }
@@ -288,7 +340,7 @@ class FigmaMod {
         document.addEventListener('keyup', (e) => {
             if (!this.isEnabled) return;
 
-            if (e.key.toLowerCase() === 'alt' && this.isAltPressed) {
+            if (e.code.startsWith('Alt') && this.isAltPressed) {
                 this.isAltPressed = false;
                 if (this.mode === 'quick' && this.previousMode) {
                     this.setMode(this.previousMode);
@@ -344,37 +396,28 @@ class FigmaMod {
         document.addEventListener('click', (e) => {
             if (!this.isEnabled) return;
 
-            console.log('Click event:', {
-                mode: this.mode,
-                isMeasureKey: this.isMeasureKey(e),
-                ctrlKey: e.ctrlKey,
-                metaKey: e.metaKey
-            });
-
-            if (this.mode === 'inspect' && this.isMeasureKey(e)) {
+            if (this.mode === 'inspect' && this.isMeasureKey(e) && e.shiftKey) {
+                //Мультивыбор Shift+Cmd/Ctrl
+                e.preventDefault();
+                e.stopPropagation();
+                this.handleMultiSelectClick(e);
+            } else if (this.mode === 'inspect' && this.isMeasureKey(e)) {
                 e.preventDefault();
                 e.stopPropagation();
 
                 const element = document.elementFromPoint(e.clientX, e.clientY);
-                console.log('Element clicked:', element);
 
                 if (element) {
                     if (this.measureElements.length === 0) {
                         this.measureElements.push(element);
                         this.showElementSelected(element);
                         this.showMeasureHint(`Выберите второй элемент (${this.getMeasureKeyText()}+клик)`);
-                        console.log('First element selected');
                     } else if (this.measureElements.length === 1) {
                         const firstElement = this.measureElements[0];
                         const secondElement = element;
 
-                        console.log('Both elements selected:', firstElement, secondElement);
-
                         const rect1 = firstElement.getBoundingClientRect();
                         const rect2 = secondElement.getBoundingClientRect();
-
-                        console.log('Rect1:', rect1);
-                        console.log('Rect2:', rect2);
 
                         this.showElementsDistance(rect1, rect2);
 
@@ -503,7 +546,7 @@ class FigmaMod {
             const hLine = document.createElement('div');
             hLine.className = 'figmamod-measure-line';
 
-            // Определяем позицию линии
+            //Определяем позицию линии
             let left, width;
             if (isFirstLeft) {
                 // Первый слева второй справа
@@ -529,7 +572,7 @@ class FigmaMod {
         `;
             linesContainer.appendChild(hLine);
 
-            // Подпись
+            //Подпись
             const hLabel = document.createElement('div');
             hLabel.className = 'figmamod-measure-label';
             hLabel.style.cssText += `
@@ -542,12 +585,12 @@ class FigmaMod {
             linesContainer.appendChild(hLabel);
         }
 
-        // Вертикальная линия
+        //Вертикальная линия
         if (verticalDistance > 0) {
             const vLine = document.createElement('div');
             vLine.className = 'figmamod-measure-line';
 
-            // Определяем позицию линии
+            //Определяем позицию линии
             let top, height;
             if (isFirstTop) {
                 //Первый сверху второй снизу
@@ -559,7 +602,7 @@ class FigmaMod {
                 height = verticalDistance;
             }
 
-            // X
+            //X
             const x = (rect1.left + rect1.width/2 + rect2.left + rect2.width/2) / 2;
 
             vLine.style.cssText = `
@@ -571,7 +614,7 @@ class FigmaMod {
         `;
             linesContainer.appendChild(vLine);
 
-            // Подпись
+            //Подпись
             const vLabel = document.createElement('div');
             vLabel.className = 'figmamod-measure-label';
             vLabel.style.cssText += `
@@ -583,7 +626,6 @@ class FigmaMod {
             linesContainer.appendChild(vLabel);
         }
 
-        // Добавляем центральную линию
         const centerLine = document.createElement('div');
         centerLine.style.cssText = `
         position: fixed;
@@ -601,7 +643,7 @@ class FigmaMod {
     `;
         linesContainer.appendChild(centerLine);
 
-        // Общее инфо
+        //Общее инфо
         if (horizontalDistance > 0 || verticalDistance > 0) {
             const infoLabel = document.createElement('div');
             infoLabel.style.cssText = `
@@ -684,6 +726,14 @@ class FigmaMod {
         this.currentElement = element;
         this.updateElementHighlight(element);
         this.showElementInfo(element, e.clientX, e.clientY);
+
+        if (this.settings.showBoxModel) {
+            this.showBoxModel(element);
+        }
+
+        if (this.settings.showSpacingLabels) {
+            this.showSpacingLabels(element);
+        }
     }
 
     handleQuickMeasure(e) {
@@ -808,7 +858,6 @@ class FigmaMod {
         const rect = element.getBoundingClientRect();
         const styles = window.getComputedStyle(element);
 
-        // Получаем информацию о тексте
         const fontSize = styles.fontSize;
         const lineHeight = styles.lineHeight;
         const fontFamily = styles.fontFamily.split(',')[0].replace(/['"]/g, '');
@@ -817,7 +866,6 @@ class FigmaMod {
         const textColor = this.rgbToHex(styles.color);
         const textContent = element.textContent.trim().substring(0, 50) + (element.textContent.trim().length > 50 ? '...' : '');
 
-        // Определяем насыщенность текста
         let weight = '';
         if (fontWeight === '400' || fontWeight === 'normal') weight = 'Regular';
         else if (fontWeight === '500') weight = 'Medium';
@@ -825,20 +873,16 @@ class FigmaMod {
         else if (fontWeight === '300') weight = 'Light';
         else weight = fontWeight;
 
-        // Создаем единую панель со всей информацией
         const textPanel = document.createElement('div');
         textPanel.className = 'figmamod-text-panel';
 
-        // Позиционируем панель рядом с курсором, но не за границами экрана
         let left = mouseX + 20;
         let top = mouseY - 20;
 
-        // Корректировка, чтобы панель не выходила за правый край
         if (left + 300 > window.innerWidth) {
             left = mouseX - 320;
         }
 
-        // Корректировка, чтобы панель не выходила за нижний край
         if (top + 250 > window.innerHeight) {
             top = mouseY - 250;
         }
@@ -846,44 +890,37 @@ class FigmaMod {
         textPanel.style.left = left + 'px';
         textPanel.style.top = top + 'px';
 
-        // Формируем содержимое в виде столбика
         textPanel.innerHTML = `
             <div style="display: flex; flex-direction: column; gap: 10px;">
-                <!-- Заголовок -->
                 <div style="display: flex; align-items: center; gap: 6px; padding-bottom: 8px; border-bottom: 1px solid #555;">
                     <span style="font-size: 16px;">📝</span>
                     <span style="font-weight: 600; color: ${this.settings.highlightColor};">Текстовый элемент</span>
                 </div>
-                
-                <!-- Содержимое текста (если есть) -->
+
                 ${textContent ? `
                     <div style="background: #2a2a2a; padding: 10px; border-radius: 6px; border-left: 3px solid ${this.settings.highlightColor}; word-break: break-word;">
                         <div style="color: #aaa; font-size: 10px; margin-bottom: 4px;">Содержимое:</div>
                         <div style="color: white; font-size: 12px;">"${textContent}"</div>
                     </div>
                 ` : ''}
-                
-                <!-- Информация о шрифте столбиком -->
+
                 <div style="display: flex; flex-direction: column; gap: 8px;">
                     <!-- Гарнитура -->
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                         <span style="color: #aaa;">Шрифт</span>
                         <span style="font-weight: 500; color: ${this.settings.highlightColor};">${fontFamily}</span>
                     </div>
-                    
-                    <!-- Размер / Интерлиньяж -->
+
                     <div style="display: flex; justify-content: space-between;">
                         <span style="color: #aaa;">Размер / Интерлиньяж</span>
                         <span>${fontSize} / ${lineHeight}</span>
                     </div>
-                    
-                    <!-- Насыщенность / Стиль -->
+
                     <div style="display: flex; justify-content: space-between;">
                         <span style="color: #aaa;">Стиль</span>
                         <span>${weight} ${fontStyle === 'italic' ? 'Курсив' : ''}</span>
                     </div>
-                    
-                    <!-- Цвет текста -->
+
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                         <span style="color: #aaa;">Цвет</span>
                         <div style="display: flex; align-items: center; gap: 8px;">
@@ -892,8 +929,7 @@ class FigmaMod {
                         </div>
                     </div>
                 </div>
-                
-                <!-- Дополнительная информация -->
+
                 <div style="display: flex; flex-wrap: wrap; gap: 12px; padding-top: 8px; border-top: 1px solid #555; font-size: 11px; color: #888;">
                     ${styles.letterSpacing !== 'normal' ? `<span>Межбуквенный: ${styles.letterSpacing}</span>` : ''}
                     ${styles.textAlign !== 'start' ? `<span>Выравнивание: ${styles.textAlign}</span>` : ''}
@@ -904,7 +940,6 @@ class FigmaMod {
         this.overlay.appendChild(textPanel);
         this.dimensionLabels.push(textPanel);
 
-        // Подсветка элемента
         this.updateElementHighlight(element);
     }
 
@@ -1304,10 +1339,8 @@ class FigmaMod {
         const label = document.createElement('div');
         label.className = 'figmamod-color-label';
 
-        label.style.cssText = `
+        const baseStyle = `
             position: fixed;
-            left: ${x}px;
-            top: ${y}px;
             background: rgba(44, 44, 44, 0.95);
             color: white;
             padding: 6px 10px;
@@ -1334,8 +1367,15 @@ class FigmaMod {
             <span>${title} ${hex}</span>
         `;
 
+        label.style.cssText = baseStyle + `left: ${x}px; top: ${y}px; visibility: hidden;`;
         label.style.pointerEvents = 'auto';
         label.style.cursor = 'pointer';
+
+        this.overlay.appendChild(label);
+        const labelRect = label.getBoundingClientRect();
+        const adjustedPos = this.getNonOverlappingPosition(x, y, labelRect.width, labelRect.height);
+        label.style.cssText = baseStyle + `left: ${adjustedPos.x}px; top: ${adjustedPos.y}px; visibility: visible;`;
+
         label.addEventListener('click', (e) => {
             e.stopPropagation();
             navigator.clipboard.writeText(hex).then(() => {
@@ -1349,7 +1389,6 @@ class FigmaMod {
             });
         });
 
-        this.overlay.appendChild(label);
         this.colorLabels.push(label);
     }
 
@@ -1357,10 +1396,8 @@ class FigmaMod {
         const label = document.createElement('div');
         label.className = 'figmamod-quick-label';
 
-        label.style.cssText = `
+        const baseStyle = `
             position: fixed;
-            left: ${x}px;
-            top: ${y}px;
             background: rgba(44, 44, 44, 0.95);
             color: white;
             padding: 6px 10px;
@@ -1371,10 +1408,17 @@ class FigmaMod {
             white-space: nowrap;
             border: 1px solid #444;
             box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            visibility: hidden;
         `;
 
+        label.style.cssText = baseStyle + `left: ${x}px; top: ${y}px;`;
         label.textContent = text;
         this.overlay.appendChild(label);
+
+        const labelRect = label.getBoundingClientRect();
+        const adjustedPos = this.getNonOverlappingPosition(x, y, labelRect.width, labelRect.height);
+        label.style.cssText = baseStyle + `left: ${adjustedPos.x}px; top: ${adjustedPos.y}px; visibility: visible;`;
+
         this.dimensionLabels.push(label);
     }
 
@@ -1392,6 +1436,83 @@ class FigmaMod {
             }
         });
         this.colorLabels = [];
+    }
+
+    getNonOverlappingPosition(x, y, width, height) {
+        const padding = 5;
+        let adjustedX = x;
+        let adjustedY = y;
+
+        const existingRects = [
+            ...this.dimensionLabels,
+            ...this.colorLabels,
+            ...this.spacingLabels
+        ].map(label => {
+            if (!label || !label.parentNode) return null;
+            const rect = label.getBoundingClientRect();
+            return {
+                left: rect.left - padding,
+                right: rect.right + padding,
+                top: rect.top - padding,
+                bottom: rect.bottom + padding
+            };
+        }).filter(rect => rect !== null);
+
+        const newRect = {
+            left: adjustedX,
+            right: adjustedX + width,
+            top: adjustedY,
+            bottom: adjustedY + height
+        };
+
+        let attempts = 0;
+        const maxAttempts = 20;
+
+        while (this._checkOverlap(newRect, existingRects) && attempts < maxAttempts) {
+
+            if (attempts === 0) {
+                adjustedY = y - height - padding;
+                newRect.top = adjustedY;
+                newRect.bottom = adjustedY + height;
+            } else if (attempts === 1) {
+                adjustedY = y + height + padding;
+                newRect.top = adjustedY;
+                newRect.bottom = adjustedY + height;
+            } else if (attempts === 2) {
+                adjustedX = x - width - padding;
+                newRect.left = adjustedX;
+                newRect.right = adjustedX + width;
+            } else if (attempts === 3) {
+                adjustedX = x + width + padding;
+                newRect.left = adjustedX;
+                newRect.right = adjustedX + width;
+            } else {
+                adjustedX = x + (attempts % 2 === 0 ? width : -width);
+                adjustedY = y + (attempts % 2 === 0 ? height : -height);
+                newRect.left = adjustedX;
+                newRect.right = adjustedX + width;
+                newRect.top = adjustedY;
+                newRect.bottom = adjustedY + height;
+            }
+            attempts++;
+        }
+
+        adjustedX = Math.max(0, Math.min(adjustedX, window.innerWidth - width));
+        adjustedY = Math.max(0, Math.min(adjustedY, window.innerHeight - height));
+
+        return { x: adjustedX, y: adjustedY };
+    }
+
+    _checkOverlap(rect1, rects) {
+        for (const rect2 of rects) {
+            if (rect1.left < rect2.right &&
+                rect1.right > rect2.left &&
+                rect1.top < rect2.bottom &&
+                rect1.bottom > rect2.top) {
+                return true;
+            }
+        }
+        return false;
     }
 
     clearOverlay() {
@@ -1604,6 +1725,737 @@ class FigmaMod {
         vertical.innerHTML = vContent;
     }
 
+    // ==================== Цветовая палитра ====================
+
+    extractColorPalette() {
+        const colors = new Map();
+        const elements = document.querySelectorAll('*');
+
+        elements.forEach(el => {
+            const styles = window.getComputedStyle(el);
+            const colorProps = [
+                styles.backgroundColor,
+                styles.color,
+                styles.borderTopColor,
+                styles.borderRightColor,
+                styles.borderBottomColor,
+                styles.borderLeftColor
+            ];
+
+            colorProps.forEach(color => {
+                if (color && color !== 'rgba(0, 0, 0, 0)' && color !== 'transparent' && color !== 'inherit') {
+                    const hex = this.rgbToHex(color);
+                    if (hex && hex !== '#000000' && hex !== '#ffffff' && hex !== '#fff') {
+                        colors.set(hex, (colors.get(hex) || 0) + 1);
+                    }
+                }
+            });
+        });
+
+        this.colorPalette = Array.from(colors.entries())
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 50)
+            .map(([color, count]) => ({ color, count }));
+
+        return this.colorPalette;
+    }
+
+    showColorPalettePanel() {
+        const oldPanel = document.getElementById('figmamod-palette-panel');
+        if (oldPanel) oldPanel.remove();
+
+        this.extractColorPalette();
+
+        const panel = document.createElement('div');
+        panel.id = 'figmamod-palette-panel';
+        panel.style.cssText = `
+            position: fixed;
+            right: 20px;
+            top: 20px;
+            width: 320px;
+            max-height: 80vh;
+            background: #2C2C2C;
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 15px;
+            color: white;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            font-size: 12px;
+            z-index: 2147483647;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            pointer-events: auto;
+            overflow-y: auto;
+        `;
+
+        let html = `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid #444; padding-bottom: 10px;">
+                <div style="font-weight: bold; font-size: 14px;">🎨 Палитра цветов</div>
+                <div style="display: flex; gap: 8px;">
+                    <button id="figmamod-export-palette" style="padding: 4px 8px; background: #0D99FF; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">Экспорт</button>
+                    <button id="figmamod-close-palette" style="padding: 4px 8px; background: #444; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">✕</button>
+                </div>
+            </div>
+            <div style="color: #888; font-size: 11px; margin-bottom: 10px;">Найдено цветов: ${this.colorPalette.length}</div>
+            <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+        `;
+
+        this.colorPalette.forEach(({ color, count }) => {
+            html += `
+                <div class="figmamod-palette-item" style="display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; padding: 6px; border-radius: 4px; border: 1px solid transparent; transition: all 0.2s;" onmouseover="this.style.borderColor='#0D99FF'" onmouseout="this.style.borderColor='transparent'">
+                    <div style="width: 40px; height: 40px; background: ${color}; border: 1px solid #555; border-radius: 4px;"></div>
+                    <div style="font-size: 10px; font-family: monospace; color: #ccc;">${color}</div>
+                    <div style="font-size: 9px; color: #888;">${count}x</div>
+                </div>
+            `;
+        });
+
+        html += `</div>`;
+        panel.innerHTML = html;
+        document.body.appendChild(panel);
+
+        panel.querySelector('#figmamod-close-palette').addEventListener('click', () => panel.remove());
+        panel.querySelector('#figmamod-export-palette').addEventListener('click', () => this.exportColorPalette());
+
+        panel.querySelectorAll('.figmamod-palette-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const color = item.querySelector('div[style*="background"]').style.background;
+                const hex = this.rgbToHex(color);
+                navigator.clipboard.writeText(hex).then(() => {
+                    const original = item.innerHTML;
+                    item.innerHTML = `<div style="font-size: 10px; color: #0D99FF;">✓ Скопировано!</div>`;
+                    setTimeout(() => { item.innerHTML = original; }, 1000);
+                });
+            });
+        });
+    }
+
+    exportColorPalette() {
+        const cssVars = this.colorPalette.map(({ color }, i) => `  --color-${i + 1}: ${color};`).join('\n');
+        const json = JSON.stringify(this.colorPalette.map(({ color, count }) => ({ color, count })), null, 2);
+
+        const exportPanel = document.createElement('div');
+        exportPanel.style.cssText = `
+            position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+            background: #2C2C2C; border: 1px solid #444; border-radius: 8px;
+            padding: 20px; color: white; font-family: 'Segoe UI', Arial, sans-serif;
+            font-size: 12px; z-index: 2147483648; min-width: 400px; max-width: 600px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.5); pointer-events: auto;
+        `;
+
+        exportPanel.innerHTML = `
+            <div style="font-weight: bold; margin-bottom: 15px;">Экспорт палитры</div>
+            <div style="display: flex; gap: 8px; margin-bottom: 15px;">
+                <button class="figmamod-export-btn" data-format="css" style="padding: 6px 12px; background: #0D99FF; color: white; border: none; border-radius: 4px; cursor: pointer;">CSS</button>
+                <button class="figmamod-export-btn" data-format="json" style="padding: 6px 12px; background: #444; color: white; border: none; border-radius: 4px; cursor: pointer;">JSON</button>
+                <button class="figmamod-export-btn" data-format="tailwind" style="padding: 6px 12px; background: #444; color: white; border: none; border-radius: 4px; cursor: pointer;">Tailwind</button>
+            </div>
+            <textarea id="figmamod-export-output" style="width: 100%; height: 200px; background: #1e1e1e; color: #0D99FF; border: 1px solid #444; border-radius: 4px; padding: 10px; font-family: monospace; font-size: 11px; resize: vertical;"></textarea>
+            <div style="display: flex; gap: 8px; margin-top: 15px;">
+                <button id="figmamod-copy-export" style="padding: 6px 16px; background: #0D99FF; color: white; border: none; border-radius: 4px; cursor: pointer;">Копировать</button>
+                <button id="figmamod-close-export" style="padding: 6px 16px; background: #444; color: white; border: none; border-radius: 4px; cursor: pointer;">Закрыть</button>
+            </div>
+        `;
+
+        document.body.appendChild(exportPanel);
+
+        const textarea = exportPanel.querySelector('#figmamod-export-output');
+
+        exportPanel.querySelectorAll('.figmamod-export-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const format = btn.dataset.format;
+                let output = '';
+
+                if (format === 'css') {
+                    output = ':root {\n' + cssVars + '\n}';
+                } else if (format === 'json') {
+                    output = json;
+                } else if (format === 'tailwind') {
+                    output = 'colors: {\n' + this.colorPalette.map(({ color }, i) => `  'color-${i + 1}': '${color}',`).join('\n') + '\n}';
+                }
+
+                textarea.value = output;
+                exportPanel.querySelectorAll('.figmamod-export-btn').forEach(b => b.style.background = '#444');
+                btn.style.background = '#0D99FF';
+            });
+        });
+
+        exportPanel.querySelector('#figmamod-copy-export').addEventListener('click', () => {
+            navigator.clipboard.writeText(textarea.value);
+        });
+
+        exportPanel.querySelector('#figmamod-close-export').addEventListener('click', () => exportPanel.remove());
+
+        // Trigger CSS by default
+        exportPanel.querySelector('[data-format="css"]').click();
+    }
+
+    // ==================== Скрины ====================
+
+    captureScreenshot() {
+        this.showMeasureHint('Делаем скриншот...');
+
+        chrome.runtime.sendMessage({ action: 'captureScreenshot' }, (response) => {
+            if (response && response.success) {
+                this.saveScreenshotFromDataUrl(response.dataUrl);
+            } else {
+                this.showMeasureHint('Ошибка скриншота: ' + (response?.error || 'неизвестно'));
+            }
+        });
+    }
+
+    saveScreenshotFromDataUrl(dataUrl) {
+        const link = document.createElement('a');
+        link.download = `figmamod-screenshot-${Date.now()}.png`;
+        link.href = dataUrl;
+        link.click();
+
+        this.showMeasureHint('Скриншот сохранен!');
+    }
+
+    // ==================== HOVER симуляция ====================
+
+    toggleElementState(state) {
+        if (this.settings.simulateState === state) {
+            this.clearStateSimulation();
+            return;
+        }
+
+        this.settings.simulateState = state;
+
+        if (this.stateSimulationStyle) {
+            this.stateSimulationStyle.remove();
+        }
+
+        this.stateSimulationStyle = document.createElement('style');
+        this.stateSimulationStyle.id = 'figmamod-state-simulation';
+
+        if (state === 'hover') {
+            this.stateSimulationStyle.textContent = `
+                *:hover { outline: 2px solid #ff4444 !important; }
+                *:hover::before { content: '🖱️ hover'; position: absolute; background: #ff4444; color: white; padding: 2px 6px; font-size: 10px; z-index: 99999; }
+            `;
+        } else if (state === 'focus') {
+            this.stateSimulationStyle.textContent = `
+                *:focus { outline: 2px solid #0D99FF !important; box-shadow: 0 0 5px #0D99FF !important; }
+                *:focus::after { content: '🎯 focus'; position: fixed; background: #0D99FF; color: white; padding: 2px 6px; font-size: 10px; z-index: 99999; }
+            `;
+        } else if (state === 'active') {
+            this.stateSimulationStyle.textContent = `
+                *:active { outline: 2px solid #FF9500 !important; }
+                *:active::after { content: '⚡ active'; position: fixed; background: #FF9500; color: white; padding: 2px 6px; font-size: 10px; z-index: 99999; }
+            `;
+        }
+
+        document.head.appendChild(this.stateSimulationStyle);
+        this.showMeasureHint(`Симуляция состояния: ${state}`);
+    }
+
+    clearStateSimulation() {
+        this.settings.simulateState = null;
+        if (this.stateSimulationStyle) {
+            this.stateSimulationStyle.remove();
+            this.stateSimulationStyle = null;
+        }
+    }
+
+    // ==================== Доступность ====================
+
+    runAccessibilityAudit() {
+        const issues = [];
+
+        //Изобрадения без текста
+        document.querySelectorAll('img').forEach((img, i) => {
+            if (!img.alt && !img.getAttribute('aria-hidden')) {
+                issues.push({
+                    type: 'error',
+                    category: 'Accessibility',
+                    message: `Изображение без alt (${img.src ? img.src.substring(0, 50) : 'no-src'})`,
+                    element: img
+                });
+            }
+        });
+
+        //WCAG контрасты
+        document.querySelectorAll('*').forEach(el => {
+            const styles = window.getComputedStyle(el);
+            const bg = styles.backgroundColor;
+            const fg = styles.color;
+
+            if (bg && fg && bg !== 'rgba(0, 0, 0, 0)' && fg !== 'rgba(0, 0, 0, 0)') {
+                const contrast = this.calculateContrastRatio(fg, bg);
+                if (contrast < 4.5 && el.textContent.trim().length > 0) {
+                    issues.push({
+                        type: 'warning',
+                        category: 'Contrast',
+                        message: `Низкий контраст: ${contrast.toFixed(2)}:1 (нужно 4.5:1)`,
+                        element: el,
+                        contrast: contrast
+                    });
+                }
+            }
+        });
+
+        //Поля без лейблов
+        document.querySelectorAll('input, textarea, select').forEach(el => {
+            const id = el.id;
+            const hasLabel = id && document.querySelector(`label[for="${id}"]`);
+            const hasAriaLabel = el.getAttribute('aria-label') || el.getAttribute('aria-labelledby');
+
+            if (!hasLabel && !hasAriaLabel && el.type !== 'hidden') {
+                issues.push({
+                    type: 'error',
+                    category: 'Forms',
+                    message: `Поле без label: ${el.type || 'input'}`,
+                    element: el
+                });
+            }
+        });
+
+        //Ссылки без текста
+        document.querySelectorAll('a').forEach(el => {
+            if (!el.textContent.trim() && !el.getAttribute('aria-label')) {
+                issues.push({
+                    type: 'warning',
+                    category: 'Links',
+                    message: 'Ссылка без текста',
+                    element: el
+                });
+            }
+        });
+
+        this.showAccessibilityReport(issues.slice(0, 100));
+    }
+
+    calculateContrastRatio(color1, color2) {
+        const lum1 = this.getLuminance(color1);
+        const lum2 = this.getLuminance(color2);
+        const brightest = Math.max(lum1, lum2);
+        const darkest = Math.min(lum1, lum2);
+        return (brightest + 0.05) / (darkest + 0.05);
+    }
+
+    getLuminance(color) {
+        const hex = this.rgbToHex(color);
+        const r = parseInt(hex.slice(1, 3), 16) / 255;
+        const g = parseInt(hex.slice(3, 5), 16) / 255;
+        const b = parseInt(hex.slice(5, 7), 16) / 255;
+
+        const [rs, gs, bs] = [r, g, b].map(c =>
+            c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)
+        );
+
+        return 0.2126 * rs + 0.7152 * gs + 0.0722 * bs;
+    }
+
+    showAccessibilityReport(issues) {
+        const oldPanel = document.getElementById('figmamod-a11y-panel');
+        if (oldPanel) oldPanel.remove();
+
+        const panel = document.createElement('div');
+        panel.id = 'figmamod-a11y-panel';
+        panel.style.cssText = `
+            position: fixed; right: 20px; top: 20px; width: 400px; max-height: 80vh;
+            background: #2C2C2C; border: 1px solid #444; border-radius: 8px;
+            padding: 15px; color: white; font-family: 'Segoe UI', Arial, sans-serif;
+            font-size: 12px; z-index: 2147483647; box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            pointer-events: auto; overflow-y: auto;
+        `;
+
+        const errors = issues.filter(i => i.type === 'error').length;
+        const warnings = issues.filter(i => i.type === 'warning').length;
+
+        let html = `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid #444; padding-bottom: 10px;">
+                <div style="font-weight: bold; font-size: 14px;">♿ Accessibility Audit</div>
+                <button id="figmamod-close-a11y" style="padding: 4px 8px; background: #444; color: white; border: none; border-radius: 4px; cursor: pointer;">✕</button>
+            </div>
+            <div style="display: flex; gap: 15px; margin-bottom: 15px;">
+                <div style="color: #ff4444;">⛔ Ошибки: ${errors}</div>
+                <div style="color: #FF9500;">⚠️ Предупреждения: ${warnings}</div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+        `;
+
+        issues.forEach((issue, i) => {
+            html += `
+                <div style="padding: 10px; background: ${issue.type === 'error' ? 'rgba(255,68,68,0.1)' : 'rgba(255,149,0,0.1)'}; border-left: 3px solid ${issue.type === 'error' ? '#ff4444' : '#FF9500'}; border-radius: 4px; cursor: pointer;" data-index="${i}">
+                    <div style="font-weight: 500; margin-bottom: 4px;">${issue.message}</div>
+                    <div style="font-size: 10px; color: #888;">${issue.category}</div>
+                </div>
+            `;
+        });
+
+        html += `</div>`;
+        panel.innerHTML = html;
+        document.body.appendChild(panel);
+
+        panel.querySelector('#figmamod-close-a11y').addEventListener('click', () => panel.remove());
+
+        panel.querySelectorAll('[data-index]').forEach(item => {
+            item.addEventListener('click', () => {
+                const issue = issues[item.dataset.index];
+                if (issue && issue.element) {
+                    issue.element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    issue.element.style.outline = '3px solid #FF9500';
+                    setTimeout(() => { issue.element.style.outline = ''; }, 2000);
+                }
+            });
+        });
+    }
+
+    // ==================== Мультиэлементы ====================
+
+    handleMultiSelectClick(e) {
+        if (!this.isMeasureKey(e)) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        const element = document.elementFromPoint(e.clientX, e.clientY);
+        if (!element) return;
+
+        const index = this.selectedElements.indexOf(element);
+
+        if (index > -1) {
+            this.selectedElements.splice(index, 1);
+            element.style.outline = '';
+        } else {
+            this.selectedElements.push(element);
+            element.style.outline = '3px solid #0D99FF';
+        }
+
+        this.showMultiSelectGuides();
+    }
+
+    showMultiSelectGuides() {
+        document.querySelectorAll('.figmamod-multi-guide').forEach(el => el.remove());
+
+        if (this.selectedElements.length < 2) return;
+
+        const rects = this.selectedElements.map(el => el.getBoundingClientRect());
+
+        //Расстояние между элементами
+        for (let i = 0; i < rects.length; i++) {
+            for (let j = i + 1; j < rects.length; j++) {
+                this.drawAlignmentGuide(rects[i], rects[j]);
+            }
+        }
+
+        if (this.selectedElements.length >= 2) {
+            const last = rects[rects.length - 2];
+            const current = rects[rects.length - 1];
+            this.showElementsDistance(last, current);
+        }
+    }
+
+    drawAlignmentGuide(rect1, rect2) {
+        const container = this.overlay;
+
+        //вертикальное
+        if (Math.abs((rect1.left + rect1.width/2) - (rect2.left + rect2.width/2)) < 5) {
+            const x = (rect1.left + rect1.width/2 + rect2.left + rect2.width/2) / 2;
+            const guide = document.createElement('div');
+            guide.className = 'figmamod-multi-guide';
+            guide.style.cssText = `
+                position: fixed; left: ${x}px; top: ${Math.min(rect1.top, rect2.top)}px;
+                width: 1px; height: ${Math.max(rect1.bottom, rect2.bottom) - Math.min(rect1.top, rect2.top)}px;
+                background: #0D99FF; border-left: 1px dashed #0D99FF; pointer-events: none; z-index: 2147483646;
+            `;
+            container.appendChild(guide);
+        }
+
+        //горизонт
+        if (Math.abs((rect1.top + rect1.height/2) - (rect2.top + rect2.height/2)) < 5) {
+            const y = (rect1.top + rect1.height/2 + rect2.top + rect2.height/2) / 2;
+            const guide = document.createElement('div');
+            guide.className = 'figmamod-multi-guide';
+            guide.style.cssText = `
+                position: fixed; left: ${Math.min(rect1.left, rect2.left)}px; top: ${y}px;
+                height: 1px; width: ${Math.max(rect1.right, rect2.right) - Math.min(rect1.left, rect2.left)}px;
+                background: #0D99FF; border-top: 1px dashed #0D99FF; pointer-events: none; z-index: 2147483646;
+            `;
+            container.appendChild(guide);
+        }
+    }
+
+    clearMultiSelection() {
+        this.selectedElements.forEach(el => { el.style.outline = ''; });
+        this.selectedElements = [];
+        document.querySelectorAll('.figmamod-multi-guide').forEach(el => el.remove());
+    }
+
+    // ==================== CSS BOX MODEL====================
+
+    showBoxModel(element) {
+        this.clearBoxModel();
+
+        const rect = element.getBoundingClientRect();
+        const styles = window.getComputedStyle(element);
+
+        const margin = {
+            top: parseFloat(styles.marginTop),
+            right: parseFloat(styles.marginRight),
+            bottom: parseFloat(styles.marginBottom),
+            left: parseFloat(styles.marginLeft)
+        };
+
+        const border = {
+            top: parseFloat(styles.borderTopWidth),
+            right: parseFloat(styles.borderRightWidth),
+            bottom: parseFloat(styles.borderBottomWidth),
+            left: parseFloat(styles.borderLeftWidth)
+        };
+
+        const padding = {
+            top: parseFloat(styles.paddingTop),
+            right: parseFloat(styles.paddingRight),
+            bottom: parseFloat(styles.paddingBottom),
+            left: parseFloat(styles.paddingLeft)
+        };
+
+        this.boxModelOverlay = document.createElement('div');
+        this.boxModelOverlay.id = 'figmamod-box-model';
+
+        const marginDiv = document.createElement('div');
+        marginDiv.style.cssText = `
+            position: fixed;
+            left: ${rect.left - margin.left}px;
+            top: ${rect.top - margin.top}px;
+            width: ${rect.width + margin.left + margin.right}px;
+            height: ${rect.height + margin.top + margin.bottom}px;
+            border: 2px dashed #FF9500;
+            background: rgba(255, 149, 0, 0.1);
+            pointer-events: none;
+            z-index: 2147483645;
+            box-sizing: border-box;
+        `;
+
+        const borderDiv = document.createElement('div');
+        borderDiv.style.cssText = `
+            position: fixed;
+            left: ${rect.left}px;
+            top: ${rect.top}px;
+            width: ${rect.width}px;
+            height: ${rect.height}px;
+            border: ${border.top}px solid rgba(13, 153, 255, 0.5);
+            background: rgba(13, 153, 255, 0.05);
+            pointer-events: none;
+            z-index: 2147483645;
+            box-sizing: border-box;
+        `;
+
+        const paddingDiv = document.createElement('div');
+        paddingDiv.style.cssText = `
+            position: fixed;
+            left: ${rect.left + border.left}px;
+            top: ${rect.top + border.top}px;
+            width: ${rect.width - border.left - border.right}px;
+            height: ${rect.height - border.top - border.bottom}px;
+            border: 2px dashed #34C759;
+            background: rgba(52, 199, 89, 0.1);
+            pointer-events: none;
+            z-index: 2147483645;
+            box-sizing: border-box;
+        `;
+
+        const contentDiv = document.createElement('div');
+        contentDiv.style.cssText = `
+            position: fixed;
+            left: ${rect.left + border.left + padding.left}px;
+            top: ${rect.top + border.top + padding.top}px;
+            width: ${rect.width - border.left - border.right - padding.left - padding.right}px;
+            height: ${rect.height - border.top - border.bottom - padding.top - padding.bottom}px;
+            border: 1px solid #FF3B30;
+            background: rgba(255, 59, 48, 0.1);
+            pointer-events: none;
+            z-index: 2147483645;
+            box-sizing: border-box;
+        `;
+
+        this.boxModelOverlay.appendChild(marginDiv);
+        this.boxModelOverlay.appendChild(borderDiv);
+        this.boxModelOverlay.appendChild(paddingDiv);
+        this.boxModelOverlay.appendChild(contentDiv);
+
+        this.createBoxModelLabel('margin', '#FF9500', rect.left - margin.left, rect.top - margin.top - 20);
+        this.createBoxModelLabel('border', '#0D99FF', rect.left, rect.top - 20);
+        this.createBoxModelLabel('padding', '#34C759', rect.left + border.left, rect.top - 20);
+        this.createBoxModelLabel('content', '#FF3B30', rect.left + border.left + padding.left, rect.top - 20);
+
+        document.body.appendChild(this.boxModelOverlay);
+    }
+
+    createBoxModelLabel(text, color, x, y) {
+        const label = document.createElement('div');
+
+        const baseStyle = `
+            position: fixed; background: ${color}; color: white; padding: 2px 6px;
+            border-radius: 3px; font: 10px/1 'Segoe UI', Arial, sans-serif;
+            pointer-events: none; z-index: 2147483646; white-space: nowrap;
+            visibility: hidden;
+        `;
+
+        label.style.cssText = baseStyle + `left: ${x}px; top: ${y}px;`;
+        label.textContent = text;
+        this.boxModelOverlay.appendChild(label);
+
+        const labelRect = label.getBoundingClientRect();
+        const adjustedPos = this.getNonOverlappingPosition(x, y, labelRect.width, labelRect.height);
+        label.style.cssText = baseStyle + `left: ${adjustedPos.x}px; top: ${adjustedPos.y}px; visibility: visible;`;
+    }
+
+    clearBoxModel() {
+        if (this.boxModelOverlay) {
+            this.boxModelOverlay.remove();
+            this.boxModelOverlay = null;
+        }
+    }
+
+
+    showSpacingLabels(element) {
+        if (!this.settings.showSpacingLabels) return;
+
+        this.clearSpacingLabels();
+
+        const rect = element.getBoundingClientRect();
+        const styles = window.getComputedStyle(element);
+
+        const margin = {
+            top: parseFloat(styles.marginTop),
+            right: parseFloat(styles.marginRight),
+            bottom: parseFloat(styles.marginBottom),
+            left: parseFloat(styles.marginLeft)
+        };
+
+        const padding = {
+            top: parseFloat(styles.paddingTop),
+            right: parseFloat(styles.paddingRight),
+            bottom: parseFloat(styles.paddingBottom),
+            left: parseFloat(styles.paddingLeft)
+        };
+
+        if (margin.top > 0) this.createSpacingLabel(`${margin.top}px`, rect.left + rect.width/2, rect.top - margin.top/2, 'margin');
+        if (margin.right > 0) this.createSpacingLabel(`${margin.right}px`, rect.right + margin.right/2, rect.top + rect.height/2, 'margin');
+        if (margin.bottom > 0) this.createSpacingLabel(`${margin.bottom}px`, rect.left + rect.width/2, rect.bottom + margin.bottom/2, 'margin');
+        if (margin.left > 0) this.createSpacingLabel(`${margin.left}px`, rect.left - margin.left/2, rect.top + rect.height/2, 'margin');
+
+        // Padding labels
+        if (padding.top > 0) this.createSpacingLabel(`${padding.top}px`, rect.left + rect.width/2, rect.top + padding.top/2, 'padding');
+        if (padding.right > 0) this.createSpacingLabel(`${padding.right}px`, rect.right - padding.right/2, rect.top + rect.height/2, 'padding');
+        if (padding.bottom > 0) this.createSpacingLabel(`${padding.bottom}px`, rect.left + rect.width/2, rect.bottom - padding.bottom/2, 'padding');
+        if (padding.left > 0) this.createSpacingLabel(`${padding.left}px`, rect.left + padding.left/2, rect.top + rect.height/2, 'padding');
+    }
+
+    createSpacingLabel(text, x, y, type) {
+        const label = document.createElement('div');
+        label.className = 'figmamod-spacing-label';
+
+        const baseStyle = `
+            position: fixed;
+            transform: translate(-50%, -50%);
+            background: ${type === 'margin' ? 'rgba(255, 149, 0, 0.9)' : 'rgba(52, 199, 89, 0.9)'};
+            color: white;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font: 10px/1 'Segoe UI', Arial, sans-serif;
+            pointer-events: none;
+            z-index: 2147483646;
+            white-space: nowrap;
+            visibility: hidden;
+        `;
+
+        label.style.cssText = baseStyle + `left: ${x}px; top: ${y}px;`;
+        label.textContent = text;
+        this.overlay.appendChild(label);
+
+        const labelRect = label.getBoundingClientRect();
+        const adjustedPos = this.getNonOverlappingPosition(x, y, labelRect.width, labelRect.height);
+        label.style.cssText = baseStyle + `left: ${adjustedPos.x}px; top: ${adjustedPos.y}px; visibility: visible;`;
+
+        this.spacingLabels.push(label);
+    }
+
+    clearSpacingLabels() {
+        this.spacingLabels.forEach(label => {
+            if (label && label.parentNode) label.remove();
+        });
+        this.spacingLabels = [];
+    }
+
+    // ==================== MOBILE VIEW  ====================
+
+    toggleMobileView() {
+        if (this.mobileViewport) {
+            this.disableMobileView();
+            return;
+        }
+
+        this.mobileViewport = document.createElement('div');
+        this.mobileViewport.id = 'figmamod-mobile-view';
+        this.mobileViewport.style.cssText = `
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 375px; height: 812px; background: white; border: 10px solid #333;
+            border-radius: 30px; overflow: hidden; z-index: 2147483640;
+            box-shadow: 0 0 50px rgba(0,0,0,0.5); pointer-events: auto;
+        `;
+
+        const iframe = document.createElement('iframe');
+        iframe.src = window.location.href;
+        iframe.style.cssText = 'width: 100%; height: 100%; border: none;';
+
+        const closeBtn = document.createElement('button');
+        closeBtn.textContent = '✕';
+        closeBtn.style.cssText = `
+            position: absolute; top: -40px; right: -10px; width: 30px; height: 30px;
+            background: #ff4444; color: white; border: none; border-radius: 50%;
+            cursor: pointer; font-size: 14px; z-index: 2147483647;
+        `;
+        closeBtn.onclick = () => this.disableMobileView();
+
+        const sizeLabel = document.createElement('div');
+        sizeLabel.style.cssText = `
+            position: absolute; bottom: -30px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.7); color: white; padding: 4px 12px;
+            border-radius: 12px; font-size: 11px; font-family: 'Segoe UI', Arial, sans-serif;
+        `;
+        sizeLabel.textContent = '375 × 812 (iPhone X)';
+
+        this.mobileViewport.appendChild(iframe);
+        this.mobileViewport.appendChild(closeBtn);
+        this.mobileViewport.appendChild(sizeLabel);
+        document.body.appendChild(this.mobileViewport);
+
+        document.body.style.overflow = 'hidden';
+
+        this.showMeasureHint('Мобильный вид активирован (iPhone X: 375×812)');
+    }
+
+    disableMobileView() {
+        if (this.mobileViewport) {
+            this.mobileViewport.remove();
+            this.mobileViewport = null;
+        }
+        document.body.style.overflow = '';
+    }
+
+
+    handleInspectMouseMove(e) {
+        const element = document.elementFromPoint(e.clientX, e.clientY);
+        if (!element || element === this.currentElement) return;
+
+        this.currentElement = element;
+        this.updateElementHighlight(element);
+        this.showElementInfo(element, e.clientX, e.clientY);
+
+        if (this.settings.showBoxModel) {
+            this.showBoxModel(element);
+        }
+
+        if (this.settings.showSpacingLabels) {
+            this.showSpacingLabels(element);
+        }
+    }
+
     rgbToHex(rgb) {
         if (!rgb) return '#000000';
         if (rgb.startsWith('#')) return rgb;
@@ -1622,8 +2474,17 @@ class FigmaMod {
     clearAll() {
         this.setMode('idle');
         this.measureElements = [];
+        this.selectedElements = [];
         document.getElementById('figmamod-selected-element')?.remove();
         document.getElementById('figmamod-measure-hint')?.remove();
+        document.getElementById('figmamod-palette-panel')?.remove();
+        document.getElementById('figmamod-a11y-panel')?.remove();
+        document.querySelectorAll('.figmamod-multi-guide').forEach(el => el.remove());
+        this.clearBoxModel();
+        this.clearSpacingLabels();
+        this.clearMultiSelection();
+        this.clearStateSimulation();
+        this.disableMobileView();
         console.log('FigmaMod: все очищено');
     }
 }

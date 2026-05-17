@@ -46,14 +46,9 @@ chrome.commands.onCommand.addListener((command) => {
                         mode: 'quick'
                     }).catch(() => {});
                     break;
-                case 'toggle-grid':
+                case 'toggle-screenshot':
                     chrome.tabs.sendMessage(tabs[0].id, {
-                        action: 'toggleGrid'
-                    }).catch(() => {});
-                    break;
-                case 'toggle-rulers':
-                    chrome.tabs.sendMessage(tabs[0].id, {
-                        action: 'toggleRulers'
+                        action: 'captureScreenshot'
                     }).catch(() => {});
                     break;
             }
@@ -65,7 +60,6 @@ function toggleExtensionState() {
     chrome.storage.local.get(['isExtensionEnabled'], (result) => {
         const newState = !(result.isExtensionEnabled !== false);
         chrome.storage.local.set({ isExtensionEnabled: newState }, () => {
-            // Отправляем сообщение во все вкладки
             chrome.tabs.query({}, (tabs) => {
                 tabs.forEach(tab => {
                     chrome.tabs.sendMessage(tab.id, {
@@ -91,7 +85,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         chrome.storage.local.get(['isExtensionEnabled'], (result) => {
             const newState = !(result.isExtensionEnabled !== false);
             chrome.storage.local.set({ isExtensionEnabled: newState }, () => {
-                // Отправляем сообщение во все вкладки
                 chrome.tabs.query({}, (tabs) => {
                     tabs.forEach(tab => {
                         chrome.tabs.sendMessage(tab.id, {
@@ -106,7 +99,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
     }
 
-    // Добавляем обработчик для clearAll
     if (message.action === 'clearAll') {
         chrome.tabs.query({}, (tabs) => {
             tabs.forEach(tab => {
@@ -116,6 +108,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             });
         });
         sendResponse({ success: true });
+        return true;
+    }
+
+    if (message.action === 'captureScreenshot') {
+        chrome.tabs.captureVisibleTab(null, { format: 'png' }, (dataUrl) => {
+            if (chrome.runtime.lastError) {
+                sendResponse({ success: false, error: chrome.runtime.lastError.message });
+                return;
+            }
+            sendResponse({ success: true, dataUrl: dataUrl });
+        });
         return true;
     }
 });

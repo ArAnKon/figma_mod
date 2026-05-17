@@ -63,6 +63,8 @@ body {
 
 .mode-section,
 .tools-section,
+.features-section,
+.state-section,
 .display-section,
 .helpers-section,
 .shortcuts-section {
@@ -142,6 +144,99 @@ body {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 8px;
+}
+
+.features-section {
+    margin-bottom: 20px;
+}
+
+.features-title {
+    font-size: 12px;
+    color: #888;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.features-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+}
+
+.feature-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 8px 4px;
+    background: #2c2c2c;
+    border: 1px solid #444;
+    border-radius: 6px;
+    color: #aaa;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 11px;
+    min-height: 50px;
+}
+
+.feature-btn:hover {
+    background: #333;
+    border-color: #555;
+}
+
+.feature-btn.active {
+    background: rgba(13, 153, 255, 0.1);
+    border-color: #0D99FF;
+    color: #0D99FF;
+}
+
+.feature-icon {
+    font-size: 16px;
+    margin-bottom: 2px;
+}
+
+.state-section {
+    margin-bottom: 20px;
+}
+
+.state-title {
+    font-size: 12px;
+    color: #888;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.state-buttons {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+}
+
+.state-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 4px;
+    background: #2c2c2c;
+    border: 1px solid #444;
+    border-radius: 6px;
+    color: #aaa;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 11px;
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+}
+
+.state-btn:hover {
+    background: #333;
+    border-color: #555;
+}
+
+.state-btn.active {
+    background: rgba(13, 153, 255, 0.1);
+    border-color: #0D99FF;
+    color: #0D99FF;
 }
 
 .tool-btn {
