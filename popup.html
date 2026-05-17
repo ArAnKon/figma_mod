@@ -57,6 +57,43 @@
     </div>
   </div>
 
+  <div class="features-section">
+    <div class="features-title">Новые функции</div>
+    <div class="features-grid">
+      <button id="paletteBtn" class="feature-btn">
+        <span class="feature-icon">🎨</span>
+        <span>Палитра</span>
+      </button>
+      <button id="screenshotBtn" class="feature-btn">
+        <span class="feature-icon">📸</span>
+        <span>Скриншот</span>
+      </button>
+      <button id="a11yBtn" class="feature-btn">
+        <span class="feature-icon">♿</span>
+        <span>A11y Аудит</span>
+      </button>
+      <button id="mobileBtn" class="feature-btn">
+        <span class="feature-icon">📱</span>
+        <span>Mobile View</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="state-section">
+    <div class="state-title">Симуляция состояний</div>
+    <div class="state-buttons">
+      <button id="hoverStateBtn" class="state-btn" data-state="hover">
+        <span>:hover</span>
+      </button>
+      <button id="focusStateBtn" class="state-btn" data-state="focus">
+        <span>:focus</span>
+      </button>
+      <button id="activeStateBtn" class="state-btn" data-state="active">
+        <span>:active</span>
+      </button>
+    </div>
+  </div>
+
   <div class="display-section">
     <div class="display-title">Отображение</div>
     <div class="display-controls">
@@ -75,6 +112,14 @@
       <label class="display-checkbox">
         <input type="checkbox" id="snapToElements">
         <span>Привязка</span>
+      </label>
+      <label class="display-checkbox">
+        <input type="checkbox" id="showBoxModel">
+        <span>Box Model</span>
+      </label>
+      <label class="display-checkbox">
+        <input type="checkbox" id="showSpacingLabels">
+        <span>Отступы (маржин/паддинг)</span>
       </label>
     </div>
   </div>
@@ -95,12 +140,13 @@
         <span>Быстрый режим</span>
       </div>
       <div class="shortcut-item">
-        <kbd>Esc</kbd>
-        <span>Выход</span>
+        <kbd>Alt+Shift+P</kbd>
+        <span>Скриншот</span>
       </div>
-    </div>
-  </div>
-
+      <div class="shortcut-item">
+        <kbd>Shift+Cmd/Ctrl+Click</kbd>
+        <span>Мультивыбор</span>
+      </div>
   <div class="actions-section">
     <button id="clearAllBtn" class="action-btn clear-btn">
       Очистить всё

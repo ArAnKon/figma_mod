@@ -11,12 +11,27 @@ document.addEventListener('DOMContentLoaded', () => {
         color: document.getElementById('showColorHex'),
         dimensions: document.getElementById('showDimensions'),
         distances: document.getElementById('showDistances'),
-        snap: document.getElementById('snapToElements')
+        snap: document.getElementById('snapToElements'),
+        boxModel: document.getElementById('showBoxModel'),
+        spacingLabels: document.getElementById('showSpacingLabels')
     };
 
     const helperButtons = {
         grid: document.getElementById('gridToolBtn'),
         rulers: document.getElementById('rulersToolBtn')
+    };
+
+    const featureButtons = {
+        palette: document.getElementById('paletteBtn'),
+        screenshot: document.getElementById('screenshotBtn'),
+        a11y: document.getElementById('a11yBtn'),
+        mobile: document.getElementById('mobileBtn')
+    };
+
+    const stateButtons = {
+        hover: document.getElementById('hoverStateBtn'),
+        focus: document.getElementById('focusStateBtn'),
+        active: document.getElementById('activeStateBtn')
     };
 
     const actionButtons = {
@@ -25,10 +40,10 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
 
-
     let currentMode = 'idle';
     let currentTool = 'selection';
     let isExtensionEnabled = true;
+    let currentState = null;
 
 
     loadExtensionState();
@@ -66,7 +81,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     Object.entries(modeButtons).forEach(([mode, button]) => {
-        if (button) { // Добавлена проверка
+        if (button) {
             button.addEventListener('click', () => {
                 if (!isExtensionEnabled) {
                     toggleExtension();
@@ -127,7 +142,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const settingsKey = key === 'color' ? 'showColorHex' :
                     key === 'dimensions' ? 'showDimensions' :
-                        key === 'distances' ? 'showDistances' : 'snapToElements';
+                        key === 'distances' ? 'showDistances' :
+                            key === 'boxModel' ? 'showBoxModel' :
+                                key === 'spacingLabels' ? 'showSpacingLabels' : 'snapToElements';
 
                 const settings = { [settingsKey]: checkbox.checked };
 
@@ -138,11 +155,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     chrome.storage.local.set({ figmamodSettings: newSettings });
                 });
 
-
-                sendMessageToActiveTab({
-                    action: 'updateSettings',
-                    settings: settings
-                });
+                if (key === 'boxModel') {
+                    sendMessageToActiveTab({ action: 'toggleBoxModel' });
+                } else if (key === 'spacingLabels') {
+                    sendMessageToActiveTab({ action: 'toggleSpacingLabels' });
+                } else {
+                    sendMessageToActiveTab({
+                        action: 'updateSettings',
+                        settings: settings
+                    });
+                }
             });
         }
     });
@@ -190,6 +212,54 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    if (featureButtons.palette) {
+        featureButtons.palette.addEventListener('click', () => {
+            if (!isExtensionEnabled) return;
+            sendMessageToActiveTab({ action: 'extractPalette' });
+        });
+    }
+
+    if (featureButtons.screenshot) {
+        featureButtons.screenshot.addEventListener('click', () => {
+            if (!isExtensionEnabled) return;
+            sendMessageToActiveTab({ action: 'captureScreenshot' });
+        });
+    }
+
+    if (featureButtons.a11y) {
+        featureButtons.a11y.addEventListener('click', () => {
+            if (!isExtensionEnabled) return;
+            sendMessageToActiveTab({ action: 'runAccessibilityAudit' });
+        });
+    }
+
+    if (featureButtons.mobile) {
+        featureButtons.mobile.addEventListener('click', () => {
+            if (!isExtensionEnabled) return;
+            sendMessageToActiveTab({ action: 'toggleMobileView' });
+            featureButtons.mobile.classList.toggle('active');
+        });
+    }
+
+    Object.entries(stateButtons).forEach(([state, button]) => {
+        if (button) {
+            button.addEventListener('click', () => {
+                if (!isExtensionEnabled) return;
+
+                if (currentState === state) {
+                    currentState = null;
+                    sendMessageToActiveTab({ action: 'toggleStateSimulation', state: null });
+                    button.classList.remove('active');
+                } else {
+                    currentState = state;
+                    sendMessageToActiveTab({ action: 'toggleStateSimulation', state: state });
+                    Object.values(stateButtons).forEach(b => b.classList.remove('active'));
+                    button.classList.add('active');
+                }
+            });
+        }
+    });
+
     function setMode(mode, tool = null) {
         if (!isExtensionEnabled && mode !== 'idle') return;
 
@@ -222,6 +292,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     displayCheckboxes.distances.checked = settings.showDistances;
                 if (settings.snapToElements !== undefined && displayCheckboxes.snap)
                     displayCheckboxes.snap.checked = settings.snapToElements;
+                if (settings.showBoxModel !== undefined && displayCheckboxes.boxModel)
+                    displayCheckboxes.boxModel.checked = settings.showBoxModel;
+                if (settings.showSpacingLabels !== undefined && displayCheckboxes.spacingLabels)
+                    displayCheckboxes.spacingLabels.checked = settings.showSpacingLabels;
 
 
                 toolButtons.forEach(button => {
@@ -243,11 +317,13 @@ document.addEventListener('DOMContentLoaded', () => {
             actionButtons.disable.textContent = 'Включить';
             actionButtons.disable.style.background = '#0D99FF';
             currentMode = 'idle';
-
+            currentState = null;
 
             const controls = [
                 ...Object.values(modeButtons).filter(Boolean),
                 ...Array.from(toolButtons).filter(Boolean),
+                ...Object.values(featureButtons).filter(Boolean),
+                ...Object.values(stateButtons).filter(Boolean),
                 actionButtons.clear
             ];
 
@@ -272,10 +348,11 @@ document.addEventListener('DOMContentLoaded', () => {
             actionButtons.disable.textContent = 'Отключить';
             actionButtons.disable.style.background = '#ff4444';
 
-
             const controls = [
                 ...Object.values(modeButtons).filter(Boolean),
                 ...Array.from(toolButtons).filter(Boolean),
+                ...Object.values(featureButtons).filter(Boolean),
+                ...Object.values(stateButtons).filter(Boolean),
                 actionButtons.clear
             ];
 
@@ -313,6 +390,14 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             toolButtons.forEach(button => button.classList.remove('active'));
         }
+
+        Object.values(stateButtons).forEach(btn => {
+            if (btn) btn.classList.remove('active');
+        });
+        if (currentState && stateButtons[currentState]) {
+            stateButtons[currentState].classList.add('active');
+        }
+
         chrome.storage.local.get(['figmamodSettings'], (result) => {
             if (result.figmamodSettings && isExtensionEnabled) {
                 toolButtons.forEach(button => {

@@ -42,6 +42,12 @@
         "default": "Alt+Shift+F"
       },
       "description": "Включить/выключить расширение"
+    },
+    "toggle-screenshot": {
+      "suggested_key": {
+        "default": "Alt+Shift+P"
+      },
+      "description": "Скриншот"
     }
   },
   "web_accessible_resources": [
